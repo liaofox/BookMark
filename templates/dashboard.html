@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="text-white">我的收藏夹</h1>
+            <div>
+                <span class="text-white me-3">欢迎，{{ session.username }}</span>
+                <a href="/logout" class="btn btn-light btn-sm">退出</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">添加新书签</h5>
+                <form id="addBookmarkForm">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" placeholder="标题" name="title" required>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="url" class="form-control" placeholder="网址 (https://...)" name="url" required>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" placeholder="描述 (可选)" name="description">
+                        </div>
+                        <div class="col-md-1">
+                            <button type="submit" class="btn btn-primary w-100">添加</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">收藏列表</h5>
+                <div id="bookmarksList" class="row">
+                    <!-- 书签将在这里动态加载 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 加载书签
+async function loadBookmarks() {
+    try {
+        const response = await fetch('/api/bookmarks');
+        if (response.ok) {
+            const bookmarks = await response.json();
+            displayBookmarks(bookmarks);
+        }
+    } catch (error) {
+        console.error('加载书签失败:', error);
+    }
+}
+
+// 显示书签
+function displayBookmarks(bookmarks) {
+    const container = document.getElementById('bookmarksList');
+    container.innerHTML = '';
+    
+    if (bookmarks.length === 0) {
+        container.innerHTML = '<div class="col-12 text-center text-muted py-4">暂无收藏</div>';
+        return;
+    }
+    
+    bookmarks.forEach(bookmark => {
+        const bookmarkEl = document.createElement('div');
+        bookmarkEl.className = 'col-md-6 col-lg-4 mb-3';
+        bookmarkEl.innerHTML = `
+            <div class="card bookmark-item h-100">
+                <div class="card-body">
+                    <h6 class="card-title">${bookmark.title}</h6>
+                    <p class="card-text text-muted small mb-2">${bookmark.description || '无描述'}</p>
+                    <a href="${bookmark.url}" target="_blank" class="btn btn-sm btn-outline-primary me-2">
+                        <i class="fas fa-external-link-alt"></i> 访问
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteBookmark(${bookmark.id})">
+                        <i class="fas fa-trash"></i> 删除
+                    </button>
+                </div>
+                <div class="card-footer text-muted small">
+                    创建于：${new Date(bookmark.created_at).toLocaleDateString()}
+                </div>
+            </div>
+        `;
+        container.appendChild(bookmarkEl);
+    });
+}
+
+// 添加书签
+document.getElementById('addBookmarkForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {
+        title: formData.get('title'),
+        url: formData.get('url'),
+        description: formData.get('description')
+    };
+    
+    try {
+        const response = await fetch('/api/bookmarks', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            this.reset();
+            loadBookmarks();
+        } else {
+            alert('添加失败');
+        }
+    } catch (error) {
+        alert('网络错误');
+    }
+});
+
+// 删除书签
+async function deleteBookmark(id) {
+    if (!confirm('确定要删除这个书签吗？')) return;
+    
+    try {
+        const response = await fetch(`/api/bookmarks/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            loadBookmarks();
+        }
+    } catch (error) {
+        alert('删除失败');
+    }
+}
+
+// 页面加载时获取书签
+document.addEventListener('DOMContentLoaded', loadBookmarks);
+</script>
+{% endblock %}
