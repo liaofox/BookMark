@@ -33,6 +33,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 创建密码验证界面
     function createPasswordPrompt() {
+        const header = document.querySelector('header');
+        if (header) {
+            header.style.display = 'none';
+        }
+
         const overlay = document.createElement('div');
         overlay.style.cssText = `
             position: fixed;
@@ -40,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(255, 255, 255, 0.9);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -68,9 +73,34 @@ document.addEventListener('DOMContentLoaded', function() {
             font-weight: 600;
         `;
         
+        const form = document.createElement('form');
+        form.autocomplete = 'off';
+        form.style.cssText = 'width: 100%;';
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+        });
+
+        const hiddenUsername = document.createElement('input');
+        hiddenUsername.type = 'text';
+        hiddenUsername.name = 'username';
+        hiddenUsername.autocomplete = 'username';
+        hiddenUsername.style.display = 'none';
+
+        const hiddenPassword = document.createElement('input');
+        hiddenPassword.type = 'password';
+        hiddenPassword.name = 'password';
+        hiddenPassword.autocomplete = 'new-password';
+        hiddenPassword.style.display = 'none';
+        
         const input = document.createElement('input');
         input.type = 'password';
         input.placeholder = '请输入密码';
+        input.autocomplete = 'new-password';
+        input.name = 'site-password-' + Date.now();
+        input.readOnly = true;
+        input.spellcheck = false;
+        input.autocorrect = 'off';
+        input.autocapitalize = 'off';
         input.style.cssText = `
             width: 100%;
             padding: 12px 16px;
@@ -82,8 +112,15 @@ document.addEventListener('DOMContentLoaded', function() {
             outline: none;
             transition: border-color 0.3s;
         `;
+        input.addEventListener('focus', function() {
+            this.readOnly = false;
+            if (this.value) {
+                this.value = '';
+            }
+        });
         
         const button = document.createElement('button');
+        button.type = 'button';
         button.textContent = '验证';
         button.style.cssText = `
             background: #4a90e2;
@@ -115,6 +152,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (input.value === 'la775210') {
                 setAuthStatus(true);
                 overlay.remove();
+                if (header) {
+                    header.style.display = 'flex';
+                }
                 loadWebsitesData(); // 认证成功后加载数据
             } else {
                 errorMsg.textContent = '密码错误，请重试';
@@ -130,9 +170,12 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         promptBox.appendChild(title);
-        promptBox.appendChild(input);
-        promptBox.appendChild(button);
-        promptBox.appendChild(errorMsg);
+        form.appendChild(hiddenUsername);
+        form.appendChild(hiddenPassword);
+        form.appendChild(input);
+        form.appendChild(button);
+        form.appendChild(errorMsg);
+        promptBox.appendChild(form);
         overlay.appendChild(promptBox);
         document.body.appendChild(overlay);
         
@@ -183,6 +226,17 @@ document.addEventListener('DOMContentLoaded', function() {
         return new URL(url).hostname;
     }
     
+    function parseSiteEntry(siteEntry) {
+        if (typeof siteEntry === 'string') {
+            const [namePart, ...rest] = siteEntry.split(',');
+            return {
+                name: (namePart || '').trim(),
+                url: (rest.join(',') || '').trim()
+            };
+        }
+        return siteEntry;
+    }
+
     // 显示网站列表
     function displayWebsites(categories) {
         const grid = document.getElementById('websites-grid');
@@ -208,7 +262,10 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             grid.appendChild(categoryTitle);
 
-            category.sites.forEach(site => {
+            category.sites.forEach(siteEntry => {
+                const site = parseSiteEntry(siteEntry);
+                if (!site || !site.url) return;
+
                 const item = document.createElement('a');
                 item.className = 'website-item';
                 item.href = site.url;
@@ -278,12 +335,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 检查认证状态并相应处理
-    if (checkAuth()) {
-        loadWebsitesData(); // 已认证，直接加载数据
-    } else {
-        createPasswordPrompt(); // 需要认证
+    // 直接显示密码验证界面
+    createPasswordPrompt();
+    
+    // 退出登录功能
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            localStorage.removeItem(STORAGE_KEY);
+            location.reload(); // 刷新页面重新显示登录界面
+        });
     }
-});
-    });
 });
