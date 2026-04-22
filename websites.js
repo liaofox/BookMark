@@ -1,10 +1,163 @@
-// 常用网站维护脚本 - 带缓存功能的图标获取
+// 常用网站维护脚本 - 带缓存功能和密码验证
 document.addEventListener('DOMContentLoaded', function() {
-    // 图标缓存管理
+    const STORAGE_KEY = 'website_auth_status';
+    const AUTH_EXPIRE_MS = 24 * 60 * 60 * 1000; // 24小时过期
     const ICON_CACHE_KEY = 'website_icons_cache';
-    const CACHE_EXPIRE_DAYS = 1; // 缓存1天
+    const CACHE_EXPIRE_DAYS = 1; // 图标缓存1天
     
-    // 获取缓存
+    // 检查是否已认证
+    function checkAuth() {
+        try {
+            const authData = localStorage.getItem(STORAGE_KEY);
+            if (!authData) return false;
+            
+            const { timestamp, authenticated } = JSON.parse(authData);
+            // 检查是否过期
+            if (Date.now() - timestamp > AUTH_EXPIRE_MS) {
+                localStorage.removeItem(STORAGE_KEY);
+                return false;
+            }
+            return authenticated === true;
+        } catch (e) {
+            return false;
+        }
+    }
+    
+    // 设置认证状态
+    function setAuthStatus(authenticated) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            timestamp: Date.now(),
+            authenticated: authenticated
+        }));
+    }
+    
+    // 创建密码验证界面
+    function createPasswordPrompt() {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        `;
+        
+        const promptBox = document.createElement('div');
+        promptBox.style.cssText = `
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        `;
+        
+        const title = document.createElement('h2');
+        title.textContent = '请输入访问密码';
+        title.style.cssText = `
+            margin: 0 0 20px 0;
+            color: #2c3e50;
+            font-size: 24px;
+            font-weight: 600;
+        `;
+        
+        const input = document.createElement('input');
+        input.type = 'password';
+        input.placeholder = '请输入密码';
+        input.style.cssText = `
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.3s;
+        `;
+        
+        const button = document.createElement('button');
+        button.textContent = '验证';
+        button.style.cssText = `
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            width: 100%;
+        `;
+        
+        const errorMsg = document.createElement('div');
+        errorMsg.style.cssText = `
+            color: #e74c3c;
+            margin-top: 10px;
+            min-height: 20px;
+            font-size: 14px;
+        `;
+        
+        button.onmouseover = () => button.style.background = '#357ae8';
+        button.onmouseout = () => button.style.background = '#4a90e2';
+        
+        input.onfocus = () => input.style.borderColor = '#4a90e2';
+        input.onblur = () => input.style.borderColor = '#e9ecef';
+        
+        button.onclick = function() {
+            if (input.value === 'la775210') {
+                setAuthStatus(true);
+                overlay.remove();
+                loadWebsitesData(); // 认证成功后加载数据
+            } else {
+                errorMsg.textContent = '密码错误，请重试';
+                input.value = '';
+                input.focus();
+            }
+        };
+        
+        input.onkeypress = function(e) {
+            if (e.key === 'Enter') {
+                button.click();
+            }
+        };
+        
+        promptBox.appendChild(title);
+        promptBox.appendChild(input);
+        promptBox.appendChild(button);
+        promptBox.appendChild(errorMsg);
+        overlay.appendChild(promptBox);
+        document.body.appendChild(overlay);
+        
+        input.focus();
+    }
+    
+    // 从JSON文件加载数据
+    function loadWebsitesData() {
+        fetch('websites-data.json')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
+            .then(data => {
+                displayWebsites(data.categories);
+            })
+            .catch(error => {
+                console.error('加载数据失败:', error);
+                alert('无法加载网站数据，请检查网络连接或数据文件');
+            });
+    }
+    
+    // 图标缓存管理
     function getIconCache() {
         try {
             const cache = localStorage.getItem(ICON_CACHE_KEY);
@@ -14,7 +167,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 设置缓存
     function setIconCache(cache) {
         try {
             localStorage.setItem(ICON_CACHE_KEY, JSON.stringify(cache));
@@ -23,151 +175,115 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 检查缓存是否过期
     function isCacheValid(timestamp) {
         return Date.now() - timestamp < CACHE_EXPIRE_DAYS * 24 * 60 * 60 * 1000;
     }
     
-    // 获取网站的缓存键
     function getCacheKey(url) {
         return new URL(url).hostname;
     }
-    const websitesData = [
-        {
-            category: '开发平台',
-            sites: [
-                { name: '工作区 - Visual Studio Code', url: 'https://vscode.dev/?vscode-lang=zh-cn' },
-                { name: '我的仓库', url: 'https://github.com/liaofox?tab=repositories' },
-                { name: 'Microsoft 合作伙伴中心 - 主页', url: 'https://partner.microsoft.com/zh-cn/dashboard/home' },
-                { name: 'Freepik | All-in-One AI Creative Suite', url: 'https://www.freepik.com/' },
-                { name: '工具集合 - 东风电驱动开发工具箱', url: 'https://m19901105k.github.io/' },
-                { name: '一元机场', url: 'https://cloud.xn--4gq62f52gdss.asia/#/dashboard' }
-            ]
-        },
-        {
-            category: '媒体娱乐',
-            sites: [
-                { name: 'Z2S 极空间', url: 'https://www.zconnect.cn/home/' },
-                { name: 'ＰＴ之友俱乐部 :: 种子', url: 'https://pterclub.net/torrents.php' },
-                { name: 'BTSCHOOL :: 种子 比特校园PT小乐园', url: 'https://pt.btschool.club/torrents.php' },
-                { name: 'HAIDAN :: 种子 海胆之家', url: 'https://www.haidan.video/torrents.php' },
-                { name: '织梦 :: 种子', url: 'https://zmpt.cc/torrents.php' }
-            ]
-        },
-        {
-            category: '工具软件',
-            sites: [
-                { name: '原版软件', url: 'https://next.itellyou.cn/Original/Index' },
-                { name: 'Ventoy', url: 'https://www.ventoy.net/cn/' },
-                { name: 'FastStone Capture注册码', url: 'https://blog.csdn.net/testManger/article/details/142490927' },
-                { name: 'Microsoft Activation Scripts (MAS)', url: 'https://massgrave.dev/#download--how-to-use-it' },
-                { name: 'Mocreak - 一键安装 Office', url: 'https://www.mocreak.com/' },
-                { name: 'Office Tool Plus | 一键部署 Office', url: 'https://otp.landian.vip/zh-cn/' },
-                { name: 'Quicker软件 - 您的指尖工具箱', url: 'https://getquicker.net/' },
-                { name: 'AnyTXT Searcher', url: 'https://anytxt.net/download/' },
-                { name: 'voidtools', url: 'http://www.voidtools.com/' },
-                { name: '小恐龙公文排版助手 for Word/WPS', url: 'https://gw.xkonglong.com/#/' },
-                { name: 'WinRAR／7-Zip', url: 'https://423down.lanzouo.com/b105455' },
-                { name: 'EasyTier - 简单安全的异地组网方案', url: 'https://easytier.rs/' },
-                { name: 'Clash Meta for Android', url: 'https://clashmetaforandroid.com/' },
-                { name: 'clash-verge-rev', url: 'https://github.com/clash-verge-rev/clash-verge-rev/releases' },
-                { name: '梁Sir贴吧云签到', url: 'https://tieba.5sir.cn/' },
-                { name: 'cangquyun.com', url: 'https://www.cangquyun.com/content?menuId=1984568704674959360' },
-                { name: 'ZeroTier Central', url: 'https://my.zerotier.com/' },
-                { name: '谷谷GGGIS地图下载器', url: 'http://gggis.com/' },
-                { name: '一键AI绘画 - 专业AI绘画生成软件', url: 'https://www.xunjieshipin.com/aihuihuapc' },
-                { name: '我的坚果云', url: 'https://www.jianguoyun.com/#/' },
-                { name: '出去走走', url: 'http://8.140.250.130/bushu/' },
-                { name: 'PhET 互动教学仿真程序', url: 'https://oef.org.cn/PhET/' },
-                { name: '5ilr绿软-靠谱软件下载网', url: 'https://www.5ilr.com/' },
-                { name: 'Windows - 软件个锤子', url: 'https://www.rjgcz.com/windows' },
-                { name: '纸由我 PaperMe - 自定义打印纸生成器', url: 'https://paperme.toolooz.com/' },
-                { name: 'Umi-OCR 发行版', url: 'https://github.com/hiroi-sora/Umi-OCR/releases' },
-                { name: 'GIGABYTE Z690I AORUS ULTRA LITE', url: 'https://www.gigabyte.cn/Motherboard/Z690I-AORUS-ULTRA-LITE-rev-10/support#support-dl' },
-                { name: 'QuickLook', url: 'https://github.com/QL-Win/QuickLook/releases' },
-                { name: 'FastStone - Download', url: 'https://www.faststone.org/download.htm' }
-            ]
-        }
-    ];
+    
+    // 显示网站列表
+    function displayWebsites(categories) {
+        const grid = document.getElementById('websites-grid');
+        if (!grid) return;
+        
+        grid.innerHTML = '';
 
-    const grid = document.getElementById('websites-grid');
-    grid.innerHTML = '';
-
-    websitesData.forEach((categoryData, index) => {
-        if (index > 0) {
-            const separator = document.createElement('div');
-            separator.className = 'separator-thin';
-            grid.appendChild(separator);
-        }
-
-        categoryData.sites.forEach(site => {
-            const item = document.createElement('a');
-            item.className = 'website-item';
-            item.href = site.url;
-            item.target = '_blank';
-            item.rel = 'noopener noreferrer';
-            item.title = site.name;
-            const domain = new URL(site.url).hostname;
-            const cacheKey = getCacheKey(site.url);
-            const iconCache = getIconCache();
-            
-            // 默认图标
-            const defaultIcon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM0YTkwZTIiIGZpbGwtb3BhY2l0eT0iMC4xIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzOCIgdGV4dC1hbmNob3I9Im1iZGRsZSIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzRhOTBlMiI+8J+OqzwvdGV4dD4KPC9zdmc+';
-
-            const img = document.createElement('img');
-            img.className = 'site-icon';
-            img.alt = site.name;
-            
-            // 检查缓存
-            if (iconCache[cacheKey] && isCacheValid(iconCache[cacheKey].timestamp)) {
-                // 使用缓存的图标
-                img.src = iconCache[cacheKey].iconUrl;
-                img.onerror = () => { img.src = defaultIcon; };
-            } else {
-                // 重新获取图标
-                const faviconUrls = [
-                    `https://${domain}/favicon.ico`,
-                    `https://api.byi.pw/favicon/?url=${encodeURIComponent(site.url)}`,
-                    `https://favicon.cccyun.cc/${encodeURIComponent(domain)}`,
-                    `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(domain)}`
-                ];
-
-                let currentIndex = 0;
-                const tryLoadFavicon = () => {
-                    if (currentIndex < faviconUrls.length) {
-                        img.src = faviconUrls[currentIndex];
-                        currentIndex++;
-                    } else {
-                        img.src = defaultIcon;
-                    }
-                };
-
-                img.onerror = tryLoadFavicon;
-                img.onload = function() {
-                    // 验证是否是有效的favicon
-                    if (this.naturalWidth > 16 && this.naturalHeight > 16) {
-                        // 缓存成功的图标
-                        const cache = getIconCache();
-                        cache[cacheKey] = {
-                            iconUrl: this.src,
-                            timestamp: Date.now()
-                        };
-                        setIconCache(cache);
-                    } else {
-                        this.onerror();
-                    }
-                };
-
-                tryLoadFavicon();
+        categories.forEach((category, index) => {
+            if (index > 0) {
+                const separator = document.createElement('div');
+                separator.className = 'separator-thin';
+                grid.appendChild(separator);
             }
 
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'site-name';
-            nameSpan.textContent = site.name;
+            const categoryTitle = document.createElement('h3');
+            categoryTitle.textContent = category.name;
+            categoryTitle.style.cssText = `
+                font-size: 18px;
+                font-weight: 600;
+                color: #2c3e50;
+                margin: 20px 0 15px 0;
+                grid-column: 1 / -1;
+            `;
+            grid.appendChild(categoryTitle);
 
-            item.appendChild(img);
-            item.appendChild(nameSpan);
-            grid.appendChild(item);
+            category.sites.forEach(site => {
+                const item = document.createElement('a');
+                item.className = 'website-item';
+                item.href = site.url;
+                item.target = '_blank';
+                item.rel = 'noopener noreferrer';
+                item.title = site.name;
+                
+                const domain = new URL(site.url).hostname;
+                const cacheKey = getCacheKey(site.url);
+                const iconCache = getIconCache();
+                
+                // 默认图标
+                const defaultIcon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM0YTkwZTIiIGZpbGwtb3BhY2l0eT0iMC4xIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzOCIgdGV4dC1hbmNob3I9Im1iZGRsZSIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzRhOTBlMiI+8J+OqzwvdGV4dD4KPC9zdmc+';
+
+                const img = document.createElement('img');
+                img.className = 'site-icon';
+                img.alt = site.name;
+                
+                if (iconCache[cacheKey] && isCacheValid(iconCache[cacheKey].timestamp)) {
+                    // 使用缓存的图标
+                    img.src = iconCache[cacheKey].iconUrl;
+                    img.onerror = () => { img.src = defaultIcon; };
+                } else {
+                    // 重新获取图标
+                    const faviconUrls = [
+                        `https://${domain}/favicon.ico`,
+                        `https://api.byi.pw/favicon/?url=${encodeURIComponent(site.url)}`,
+                        `https://favicon.cccyun.cc/${encodeURIComponent(domain)}`,
+                        `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(domain)}`
+                    ];
+
+                    let currentIndex = 0;
+                    const tryLoadFavicon = () => {
+                        if (currentIndex < faviconUrls.length) {
+                            img.src = faviconUrls[currentIndex];
+                            currentIndex++;
+                        } else {
+                            img.src = defaultIcon;
+                        }
+                    };
+
+                    img.onerror = tryLoadFavicon;
+                    img.onload = function() {
+                        if (this.naturalWidth > 16 && this.naturalHeight > 16) {
+                            const cache = getIconCache();
+                            cache[cacheKey] = {
+                                iconUrl: this.src,
+                                timestamp: Date.now()
+                            };
+                            setIconCache(cache);
+                        } else {
+                            this.onerror();
+                        }
+                    };
+
+                    tryLoadFavicon();
+                }
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'site-name';
+                nameSpan.textContent = site.name;
+
+                item.appendChild(img);
+                item.appendChild(nameSpan);
+                grid.appendChild(item);
+            });
         });
+    }
+    
+    // 检查认证状态并相应处理
+    if (checkAuth()) {
+        loadWebsitesData(); // 已认证，直接加载数据
+    } else {
+        createPasswordPrompt(); // 需要认证
+    }
+});
     });
 });
